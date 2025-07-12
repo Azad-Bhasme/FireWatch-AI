@@ -16,6 +16,8 @@ runs/
 *.jpeg
 *.tmp
 
+
+runs/
 build/
 develop-eggs/
 dist/
