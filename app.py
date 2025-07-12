@@ -1,97 +1,85 @@
 import streamlit as st
 import cv2
 from PIL import Image
+import ultralytics
 from ultralytics import YOLO
 import tempfile
 import os
 import uuid
 
-# Page setup
-st.set_page_config(page_title="FireWatch AI", page_icon="🔥")
-st.markdown("<h1 style='text-align: center;'>🔥 FireWatch AI</h1>", unsafe_allow_html=True)
-st.markdown("<h4 style='text-align: center;'>Smart detection, safer protection. 🔥🧠</h4>", unsafe_allow_html=True)
 
-# Load YOLO model
+st.set_page_config("Fire Detection")
+st.title("🔥 FireWatch AI")
+
+# Load model
 model = YOLO("best.pt")
 
-# Input Mode Selection
-input_mode = st.radio("Choose Input Mode:", ["📤 Upload file", "📸 Use webcam"], horizontal=True)
+# Initialize session state to store result path
+if 'result_path' not in st.session_state:
+    st.session_state.result_path = None
 
+uploaded_file = st.file_uploader("Upload video/image", type=["mp4", "avi", "jpg", "jpeg", "png"])
 
-if input_mode == "📤 Upload file":
-    uploaded_file = st.file_uploader("Upload an image or video", type=["jpg", "jpeg", "png", "mp4", "avi"])
+if uploaded_file:
+    file_ext = uploaded_file.name.split(".")[-1].lower()
+    with tempfile.NamedTemporaryFile(delete=False, suffix=f".{file_ext}") as temp_file:
+        temp_file.write(uploaded_file.read())
+        temp_path = temp_file.name
 
-    if uploaded_file is not None:
-        file_ext = uploaded_file.name.split(".")[-1].lower()
-        with tempfile.NamedTemporaryFile(delete=False, suffix=f".{file_ext}") as temp_file:
-            temp_file.write(uploaded_file.read())
-            temp_path = temp_file.name
+    st.success("✅ File uploaded. Detecting fire...")
+    results = model.predict(source=temp_path, save=True, conf=0.5)
+    st.session_state.result_path = results[0].save_dir  # Save result folder
 
-        st.success("✅ File uploaded. Detecting fire...")
+# 👇 "View Your Result" only appears after detection
+if st.session_state.result_path:
+    if st.button("👀 View Your Result"):
+        for file in os.listdir(st.session_state.result_path):
+            f_path = os.path.join(st.session_state.result_path, file)
+            if file.endswith((".jpg", ".jpeg", ".png")):
+                st.image(f_path, caption="🔥 Detected Image", use_container_width=True)
+            elif file.endswith((".mp4", ".avi")):
+                st.video(f_path, format="video/mp4")
 
-        try:
-            results = model.predict(source=temp_path, save=True, conf=0.5)
-            save_dir = results[0].save_dir
-
-            # Display View Result button
-            if st.button("🎥 View Your Result"):
-                video_found = False
-                for f in os.listdir(save_dir):
-                    file_path = os.path.join(save_dir, f)
-                    if f.endswith((".jpg", ".jpeg", ".png")):
-                        st.image(file_path, caption="Fire Detected 🔥", use_column_width=True)
-                    elif f.endswith((".mp4", ".avi")):
-                        st.video(file_path)
-                        video_found = True
-
-                if not video_found:
-                    st.warning("✅ Detection completed, but no video was found.")
-        except Exception as e:
-            st.error(f"❌ Detection failed: {e}")
-
-
-elif input_mode == "📸 Use webcam":
-    st.warning("⚠️ Webcam only works in local environment (not Streamlit Cloud).")
-
-    if st.button("📡 Start Live Fire Detection"):
-        cap = cv2.VideoCapture(0)
+# Webcam logic (local only)
+elif mode == "📷 Use Webcam":
+    st.warning("⚠️ This works only in local environment (not Streamlit Cloud)")
+    if st.button("📷 Start Camera", key="start_cam"):
+        cam = cv2.VideoCapture(0)
         stframe = st.empty()
 
         stop = False
-        stop_btn_key = str(uuid.uuid4())  # generate unique key
+        stop_key = str(uuid.uuid4())
 
-        while cap.isOpened():
-            ret, frame = cap.read()
+        while cam.isOpened() and not stop:
+            ret, frame = cam.read()
             if not ret:
-                st.error("❌ Failed to read from camera.")
+                st.error("❌ Failed to access camera.")
                 break
 
-            results = model.predict(frame, conf=0.5)
-            res_plot = results[0].plot()
+            cv2.imwrite("frame.jpg", frame)
+            results = model.predict("frame.jpg", conf=0.5)
+            img = results[0].plot()
+            stframe.image(img, channels="BGR", use_container_width=True)
 
-            stframe.image(res_plot, channels="BGR", use_column_width=True)
+            stop = st.button("🛑 Stop Camera", key=stop_key)
 
-            # Stop button with unique key to avoid ID conflict
-            if st.button("🛑 Stop Camera", key=stop_btn_key):
-                stop = True
-                break
+        cam.release()
 
-        cap.release()
-        st.success("✅ Camera stopped.")
-
-
+# Blinking Tagline
 st.markdown("""
-    <style>
-    .blinking {
-        animation: blinker 1s linear infinite;
-        color: #ff4b4b;
-        font-weight: bold;
-        text-align: center;
-        font-size: 14px;
-    }
-    @keyframes blinker {
-        50% { opacity: 0; }
-    }
-    </style>
-    <p class="blinking">made with ❤️ by Azad Bhasme</p>
+<style>
+.blink {
+  animation: blink-animation 10s steps(2, start) infinite;
+  color: #fa5252;
+  text-align: center;
+  font-weight: bold;
+  font-size: 14px;
+}
+@keyframes blink-animation {
+  to {
+    visibility: hidden;
+  }
+}
+</style>
+<p class="blink">made with ❤️ by Azad Bhasme</p>
 """, unsafe_allow_html=True)

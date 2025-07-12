@@ -8,6 +8,14 @@ __pycache__/
 
 # Distribution / packaging
 .Python
+runs/
+*.jpg
+*.mp4
+*.avi
+*.png
+*.jpeg
+*.tmp
+
 build/
 develop-eggs/
 dist/
