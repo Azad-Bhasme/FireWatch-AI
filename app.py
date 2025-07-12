@@ -4,83 +4,78 @@ from ultralytics import YOLO
 import tempfile
 import os
 import cv2
-import time
-import shutil
 
-# App Config
 st.set_page_config(page_title="FireWatch AI", page_icon="🔥")
-st.title("🔥 FireWatch AI")
-st.markdown("### Smart detection, safer protection. 🔥🧠")
+st.markdown("<h1 style='text-align: center;'>🔥 FireWatch AI</h1>", unsafe_allow_html=True)
+st.markdown("<h4 style='text-align: center;'>Smart detection, safer protection. 🔥🧠</h4>", unsafe_allow_html=True)
 
 model = YOLO("best.pt")
 
-# Input Mode Selection
-mode = st.radio("Choose Input Mode:", ["📤 Upload file", "📷 Use webcam"])
+input_mode = st.radio("Choose Input Mode:", ["📤 Upload file", "📸 Use webcam"], horizontal=True)
 
-# Upload Mode
-if mode == "📤 Upload file":
+if input_mode == "📤 Upload file":
     uploaded_file = st.file_uploader("Upload an image or video", type=["jpg", "jpeg", "png", "mp4", "avi", "mpeg4"])
-    view_result = st.empty()  # Placeholder for result button
 
     if uploaded_file is not None:
-        file_extension = uploaded_file.name.split('.')[-1].lower()
-
-        with tempfile.NamedTemporaryFile(delete=False, suffix=f".{file_extension}") as temp_file:
+        file_ext = uploaded_file.name.split(".")[-1].lower()
+        with tempfile.NamedTemporaryFile(delete=False, suffix=f".{file_ext}") as temp_file:
             temp_file.write(uploaded_file.read())
             temp_file_path = temp_file.name
 
-        st.success("✅ File uploaded. Running detection...")
+        st.success("✅ File uploaded. Detecting fire...")
 
         try:
-            results = model.predict(source=temp_file_path, save=True, conf=0.6)
-            output_path = results[0].save_dir
+            results = model.predict(source=temp_file_path, save=True, conf=0.5)
+            save_dir = results[0].save_dir
 
-            if st.button("🎥 View Your Result"):
-                output_files = [f for f in os.listdir(output_path) if f.lower().endswith((".jpg", ".png", ".mp4", ".avi"))]
+            video_shown = False
+            for f in os.listdir(save_dir):
+                file_path = os.path.join(save_dir, f)
+                if f.endswith((".jpg", ".jpeg", ".png")):
+                    st.image(file_path, caption="Fire Detected 🔥", use_column_width=True)
+                elif f.endswith((".mp4", ".avi")):
+                    st.video(file_path)
+                    video_shown = True
 
-                if not output_files:
-                    st.warning("⚠️ No result files found.")
-                else:
-                    for file in output_files:
-                        full_path = os.path.join(output_path, file)
-                        temp_output = os.path.join(tempfile.gettempdir(), file)
-                        shutil.copy(full_path, temp_output)
-
-                        if file.lower().endswith((".jpg", ".png")):
-                            st.image(temp_output, caption="🖼️ Detected Image")
-                        elif file.lower().endswith((".mp4", ".avi")):
-                            st.video(temp_output)
-
+            if not video_shown:
+                st.warning("✅ Detection completed, but no video was generated.")
         except Exception as e:
             st.error(f"❌ Detection failed: {e}")
 
-# Webcam Mode (Works only locally, not on Streamlit Cloud)
-elif mode == "📷 Use webcam":
-    start = st.button("🎬 Start Live Detection")
-    stop = st.button("🛑 Stop Detection", key="stop_live")
+elif input_mode == "📸 Use webcam":
+    st.warning("⚠️ Webcam only works in **local environments**. Streamlit Cloud does not support real-time webcam access.")
+
+    start = st.button("Start Live Detection (Local Only)")
 
     if start:
-        stframe = st.empty()
         cap = cv2.VideoCapture(0)
+        stframe = st.empty()
 
-        if not cap.isOpened():
-            st.error("❌ Unable to access the webcam.")
-        else:
-            st.success("✅ Webcam is live. Detecting fire...")
-            while cap.isOpened():
-                ret, frame = cap.read()
-                if not ret:
-                    st.warning("⚠️ Failed to read from webcam.")
-                    break
+        while cap.isOpened():
+            ret, frame = cap.read()
+            if not ret:
+                break
 
-                results = model.predict(source=frame, imgsz=640, conf=0.6, verbose=False)
-                annotated_frame = results[0].plot()
+            results = model.predict(frame, conf=0.5)
+            res_plotted = results[0].plot()
 
-                stframe.image(annotated_frame, channels="BGR")
+            stframe.image(res_plotted, channels="BGR", use_column_width=True)
 
-                if stop:
-                    cap.release()
-                    st.success("🛑 Detection stopped.")
-                    break
+        cap.release()
 
-                time.sleep(0.03)
+# Blinking "Made with ❤️" Tagline
+st.markdown("""
+    <style>
+    .blinking {
+        animation: blinker 1s linear infinite;
+        color: #ff4b4b;
+        font-weight: bold;
+        text-align: center;
+    }
+
+    @keyframes blinker {
+        50% { opacity: 0; }
+    }
+    </style>
+    <p class="blinking">made with ❤️ by Azad Bhasme</p>
+""", unsafe_allow_html=True)
