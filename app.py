@@ -5,91 +5,61 @@ import tempfile
 import os
 import cv2
 import time
-import shutil
 
-# App Config
 st.set_page_config(page_title="FireWatch AI", page_icon="🔥")
 st.title("🔥 FireWatch AI")
 st.markdown("### Smart detection, safer protection. 🔥🧠")
 
-# Load Model
 model = YOLO("best.pt")
 
-# Input Mode Selection
-mode = st.radio("Choose Input Mode:", ["📤 Upload file", "📷 Use webcam"])
+mode = st.radio("Select Detection Mode:", ["Upload Image/Video", "Use Webcam 🔴"])
 
-# 📤 File Upload Mode
-if mode == "📤 Upload file":
-    uploaded_file = st.file_uploader("Upload an image or video", type=["jpg", "jpeg", "png", "mp4", "avi", "mpeg4"])
+if mode == "Upload Image/Video":
+    uploaded_file = st.file_uploader("📤 Upload image or video", type=["jpg", "jpeg", "png", "mp4", "avi"])
 
     if uploaded_file is not None:
-        file_extension = uploaded_file.name.split('.')[-1].lower()
+        ext = uploaded_file.name.split('.')[-1]
+        with tempfile.NamedTemporaryFile(delete=False, suffix=f".{ext}") as tmp_file:
+            tmp_file.write(uploaded_file.read())
+            temp_path = tmp_file.name
 
-        with tempfile.NamedTemporaryFile(delete=False, suffix=f".{file_extension}") as temp_file:
-            temp_file.write(uploaded_file.read())
-            temp_file_path = temp_file.name
+        st.success("✅ File uploaded. Detecting fire...")
+        results = model.predict(source=temp_path, save=True, conf=0.6)
+        output_path = results[0].save_dir
 
-        st.success("✅ File uploaded. Running detection...")
+        for file in os.listdir(output_path):
+            if file.lower().endswith((".jpg", ".png")):
+                st.image(os.path.join(output_path, file))
+            elif file.lower().endswith((".mp4", ".avi")):
+                st.video(os.path.join(output_path, file))
 
-        try:
-            results = model.predict(source=temp_file_path, save=True, conf=0.6)
-            output_path = results[0].save_dir
+        if st.button("📂 View Detection Folder"):
+            st.markdown(f"📁 Results saved to: `{output_path}`")
 
-            if st.button("🎥 View Your Result"):
-                output_files = [f for f in os.listdir(output_path) if f.lower().endswith((".jpg", ".png", ".mp4", ".avi"))]
+elif mode == "Use Webcam 🔴":
+    st.warning("Click below to start your **live fire detection** via webcam.")
+    start_cam = st.button("🎥 Start Camera")
 
-                if not output_files:
-                    st.warning("⚠️ No result files found.")
-                else:
-                    for file in output_files:
-                        full_path = os.path.join(output_path, file)
-                        temp_output = os.path.join(tempfile.gettempdir(), file)
-                        shutil.copy(full_path, temp_output)
-
-                        if file.lower().endswith((".jpg", ".png")):
-                            st.image(temp_output, caption="🖼️ Detected Image")
-                        elif file.lower().endswith((".mp4", ".avi")):
-                            st.video(temp_output)
-
-        except Exception as e:
-            st.error(f"❌ Detection failed: {e}")
-
-# 📷 Webcam Mode
-elif mode == "📷 Use webcam":
-    start = st.button("🎬 Start Live Detection")
-    stop = st.button("🛑 Stop Detection", key="stop_live")
-
-    if start:
+    if start_cam:
         stframe = st.empty()
         cap = cv2.VideoCapture(0)
 
         if not cap.isOpened():
-            st.error("❌ Unable to access the webcam.")
+            st.error("Webcam not detected. Please connect a camera.")
         else:
-            st.success("✅ Webcam is live. Detecting fire...")
-            while cap.isOpened():
+            while True:
                 ret, frame = cap.read()
                 if not ret:
-                    st.warning("⚠️ Failed to read from webcam.")
+                    st.error("Failed to read from webcam.")
                     break
 
-                results = model.predict(source=frame, imgsz=640, conf=0.6, verbose=False)
-                annotated_frame = results[0].plot()
+                results = model.predict(source=frame, conf=0.6, verbose=False)
+                frame_with_boxes = results[0].plot()
+                stframe.image(frame_with_boxes, channels="BGR")
 
-                stframe.image(annotated_frame, channels="BGR")
+                time.sleep(0.1)
 
-                if stop:
-                    cap.release()
-                    st.success("🛑 Detection stopped.")
-                    break
-
-                time.sleep(0.03)
-
-# Footer
-st.markdown("---")
-st.markdown("<center><sub>made with ❤️ by Azad Bhasme</sub></center>", unsafe_allow_html=True)
-
+            cap.release()
 
 st.markdown("---")
 st.markdown("<center><sub>made with ❤️ by Azad Bhasme</sub></center>", unsafe_allow_html=True)
-
