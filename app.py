@@ -1,85 +1,85 @@
 import streamlit as st
 import cv2
-from PIL import Image
-import ultralytics
-from ultralytics import YOLO
-import tempfile
 import os
 import uuid
+import tempfile
+import shutil
+from PIL import Image
+from ultralytics import YOLO
 
+# Clean previous runs
+if os.path.exists("runs"):
+    shutil.rmtree("runs")
 
-st.set_page_config("Fire Detection")
-st.title("🔥 FireWatch AI")
+# Page configuration
+st.set_page_config(page_title="FireWatch AI", page_icon="🔥")
+st.markdown("<h1 style='text-align: center;'>🔥 FireWatch AI</h1>", unsafe_allow_html=True)
+st.markdown("<h4 style='text-align: center;'>Smart detection, safer protection. 🔥🧠</h4>", unsafe_allow_html=True)
 
 # Load model
 model = YOLO("best.pt")
 
-# Initialize session state to store result path
-if 'result_path' not in st.session_state:
-    st.session_state.result_path = None
+# Function to perform detection and return result file path
+def detect_and_save(source_path, is_video=False):
+    results = model.predict(source=source_path, conf=0.5, save=True)
+    output_dir = results[0].save_dir
 
-uploaded_file = st.file_uploader("Upload video/image", type=["mp4", "avi", "jpg", "jpeg", "png"])
+    result_file = None
+    for file in os.listdir(output_dir):
+        if file.endswith((".jpg", ".jpeg", ".png", ".mp4", ".avi")):
+            result_file = os.path.join(output_dir, file)
+            break
+    return result_file
 
-if uploaded_file:
-    file_ext = uploaded_file.name.split(".")[-1].lower()
-    with tempfile.NamedTemporaryFile(delete=False, suffix=f".{file_ext}") as temp_file:
-        temp_file.write(uploaded_file.read())
-        temp_path = temp_file.name
+# Input mode
+input_mode = st.radio("Choose Input Mode:", ["📤 Upload File"], horizontal=True)
 
-    st.success("✅ File uploaded. Detecting fire...")
-    results = model.predict(source=temp_path, save=True, conf=0.5)
-    st.session_state.result_path = results[0].save_dir  # Save result folder
+if input_mode == "📤 Upload File":
+    uploaded_file = st.file_uploader("Upload an image or video", type=["jpg", "jpeg", "png", "mp4", "avi"])
 
-# 👇 "View Your Result" only appears after detection
-if st.session_state.result_path:
-    if st.button("👀 View Your Result"):
-        for file in os.listdir(st.session_state.result_path):
-            f_path = os.path.join(st.session_state.result_path, file)
-            if file.endswith((".jpg", ".jpeg", ".png")):
-                st.image(f_path, caption="🔥 Detected Image", use_container_width=True)
-            elif file.endswith((".mp4", ".avi")):
-                st.video(f_path, format="video/mp4")
+    if uploaded_file:
+        ext = uploaded_file.name.split(".")[-1]
+        with tempfile.NamedTemporaryFile(delete=False, suffix=f".{ext}") as temp_file:
+            temp_file.write(uploaded_file.read())
+            temp_path = temp_file.name
 
-# Webcam logic (local only)
-elif mode == "📷 Use Webcam":
-    st.warning("⚠️ This works only in local environment (not Streamlit Cloud)")
-    if st.button("📷 Start Camera", key="start_cam"):
-        cam = cv2.VideoCapture(0)
-        stframe = st.empty()
+        st.success("✅ File uploaded. Running detection.. ⭕")
+        result_path = detect_and_save(temp_path, is_video=ext in ["mp4", "avi"])
 
-        stop = False
-        stop_key = str(uuid.uuid4())
+        if result_path:
+            # Show result
+            if st.button("👀 View Your Result", key="view_btn"):
+                if result_path.endswith((".jpg", ".jpeg", ".png")):
+                    st.image(result_path, caption="Fire Detected", use_container_width=True)
+                elif result_path.endswith((".mp4", ".avi")):
+                    st.video(result_path)
 
-        while cam.isOpened() and not stop:
-            ret, frame = cam.read()
-            if not ret:
-                st.error("❌ Failed to access camera.")
-                break
+            # Offer download
+            with open(result_path, "rb") as f:
+                result_data = f.read()
+            st.download_button("📥 Download Result", result_data, file_name=f"result_{ext}", mime="video/mp4" if "mp4" in ext else "image/jpeg")
 
-            cv2.imwrite("frame.jpg", frame)
-            results = model.predict("frame.jpg", conf=0.5)
-            img = results[0].plot()
-            stframe.image(img, channels="BGR", use_container_width=True)
+        else:
+            st.error("❌ No result was generated.")
 
-            stop = st.button("🛑 Stop Camera", key=stop_key)
-
-        cam.release()
-
-# Blinking Tagline
+# Blinking ❤️ footer (only heart blinks)
 st.markdown("""
-<style>
-.blink {
-  animation: blink-animation 10s steps(2, start) infinite;
-  color: #fa5252;
-  text-align: center;
-  font-weight: bold;
-  font-size: 14px;
-}
-@keyframes blink-animation {
-  to {
-    visibility: hidden;
-  }
-}
-</style>
-<p class="blink">made with ❤️ by Azad Bhasme</p>
+    <style>
+    .footer-blink {
+        text-align: center;
+        font-family: 'Segoe UI', sans-serif;
+        font-size: 14px;
+        font-weight: 500;
+        color: #333;
+    }
+    .footer-heart {
+        color: red;
+        animation: blink 1s linear infinite;
+    }
+    @keyframes blink {
+        50% { opacity: 0; }
+    }
+    </style>
+
+    <div class="footer-blink">made with <span class="footer-heart">❤️</span> by Azad Bhasme</div>
 """, unsafe_allow_html=True)
