@@ -1,65 +1,87 @@
 import streamlit as st
+import cv2
 from PIL import Image
 from ultralytics import YOLO
 import tempfile
 import os
-import cv2
 import time
 
+# Page setup
 st.set_page_config(page_title="FireWatch AI", page_icon="🔥")
 st.title("🔥 FireWatch AI")
 st.markdown("### Smart detection, safer protection. 🔥🧠")
 
+# Load YOLOv8 model
 model = YOLO("best.pt")
 
-mode = st.radio("Select Detection Mode:", ["Upload Image/Video", "Use Webcam 🔴"])
+# Choose input mode
+mode = st.radio("Choose Input Mode:", ["📤 Upload file", "📷 Use Webcam"])
 
-if mode == "Upload Image/Video":
-    uploaded_file = st.file_uploader("📤 Upload image or video", type=["jpg", "jpeg", "png", "mp4", "avi"])
+# Detection function
+def detect_fire(source_path, is_video):
+    results = model.predict(source=source_path, save=True, conf=0.4)
+    output_path = results[0].save_dir
 
-    if uploaded_file is not None:
-        ext = uploaded_file.name.split('.')[-1]
-        with tempfile.NamedTemporaryFile(delete=False, suffix=f".{ext}") as tmp_file:
-            tmp_file.write(uploaded_file.read())
-            temp_path = tmp_file.name
+    # Display results
+    for file in os.listdir(output_path):
+        if file.endswith((".jpg", ".png")):
+            st.image(os.path.join(output_path, file), caption="Detected Image")
+        elif file.endswith((".mp4", ".avi")):
+            st.video(os.path.join(output_path, file))
+
+    return output_path
+
+# Upload file section
+if mode == "📤 Upload file":
+    uploaded_file = st.file_uploader("Upload an image or video", type=["jpg", "jpeg", "png", "mp4", "avi"])
+    if uploaded_file:
+        suffix = uploaded_file.name.split('.')[-1]
+        with tempfile.NamedTemporaryFile(delete=False, suffix=f".{suffix}") as temp_file:
+            temp_file.write(uploaded_file.read())
+            temp_path = temp_file.name
 
         st.success("✅ File uploaded. Detecting fire...")
-        results = model.predict(source=temp_path, save=True, conf=0.6)
-        output_path = results[0].save_dir
+        output_dir = detect_fire(temp_path, is_video=suffix in ["mp4", "avi"])
 
-        for file in os.listdir(output_path):
-            if file.lower().endswith((".jpg", ".png")):
-                st.image(os.path.join(output_path, file))
-            elif file.lower().endswith((".mp4", ".avi")):
-                st.video(os.path.join(output_path, file))
+# Webcam section (LOCAL ONLY)
+elif mode == "📷 Use Webcam":
+    st.warning("⚠️ Webcam access only works on local PC (not Streamlit Cloud).")
 
-        if st.button("📂 View Detection Folder"):
-            st.markdown(f"📁 Results saved to: `{output_path}`")
-
-elif mode == "Use Webcam 🔴":
-    st.warning("Click below to start your **live fire detection** via webcam.")
-    start_cam = st.button("🎥 Start Camera")
-
-    if start_cam:
-        stframe = st.empty()
+    if st.button("Start Camera Detection"):
         cap = cv2.VideoCapture(0)
+        stframe = st.empty()
 
-        if not cap.isOpened():
-            st.error("Webcam not detected. Please connect a camera.")
-        else:
-            while True:
-                ret, frame = cap.read()
-                if not ret:
-                    st.error("Failed to read from webcam.")
-                    break
+        while True:
+            ret, frame = cap.read()
+            if not ret:
+                st.error("❌ Failed to capture image from webcam.")
+                break
 
-                results = model.predict(source=frame, conf=0.6, verbose=False)
-                frame_with_boxes = results[0].plot()
-                stframe.image(frame_with_boxes, channels="BGR")
+            img_path = "frame.jpg"
+            cv2.imwrite(img_path, frame)
 
-                time.sleep(0.1)
+            results = model.predict(source=img_path, conf=0.4)
+            annotated = results[0].plot()
+            annotated_img = Image.fromarray(annotated)
 
-            cap.release()
+            stframe.image(annotated_img, caption="Live Fire Detection", use_column_width=True)
+            if st.button("Stop"):
+                break
 
-st.markdown("---")
-st.markdown("<center><sub>made with ❤️ by Azad Bhasme</sub></center>", unsafe_allow_html=True)
+        cap.release()
+
+# Footer with blink effect
+st.markdown("""
+<style>
+.blink-footer {
+  text-align: center;
+  animation: blink 1s step-start 0s infinite;
+  color: #fa5252;
+  font-size: 13px;
+}
+@keyframes blink {
+  50% { opacity: 0; }
+}
+</style>
+<div class='blink-footer'>made with ❤️ by Azad Bhasme</div>
+""", unsafe_allow_html=True)
