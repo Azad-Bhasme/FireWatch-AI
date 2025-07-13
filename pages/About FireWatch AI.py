@@ -1,6 +1,6 @@
 import streamlit as st
 
-st.set_page_config(page_title="About FireWatch AI", page_icon="🔥")
+st.set_page_config(page_title="About - FireWatch AI", page_icon="ℹ️")
 
 st.markdown("<h1 style='text-align: center;'>📘 About FireWatch AI</h1>", unsafe_allow_html=True)
 
