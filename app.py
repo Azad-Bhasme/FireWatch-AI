@@ -42,7 +42,7 @@ if mode == "📤 Upload file":
             tmp.write(uploaded_file.read())
             tmp_path = tmp.name
 
-        st.success("✅ File uploaded. Running detection..⭕")
+        st.success("✅ File uploaded. Running detection...")
 
         # Run detection
         result_dir = detect_fire(tmp_path, is_video=suffix in ["mp4", "avi"])
