@@ -6,8 +6,9 @@ import tempfile
 import os
 import uuid
 import shutil
+import time
 
-# Clean up old results on each run
+# Clean up old results
 try:
     shutil.rmtree("runs")
 except Exception:
@@ -24,15 +25,13 @@ st.markdown("<h4 style='text-align: center;'>Smart detection, safer protection. 
 # Select mode
 mode = st.radio("Choose Input Mode:", ["📤 Upload file", "📷 Use Webcam"], horizontal=True)
 
-
 # 🔍 Fire Detection Function
 def detect_fire(path, is_video=False):
-    results = model.predict(source=path, save=True, conf=0.5)
-    output_dir = results[0].save_dir
-    return output_dir
+    results = model.predict(source=path, save=True, conf=0.75)
+    return results[0].save_dir
 
 
-# 📤 Upload File
+# 📤 Upload Mode
 if mode == "📤 Upload file":
     uploaded_file = st.file_uploader("Upload an image or video", type=["jpg", "jpeg", "png", "mp4", "avi"])
 
@@ -42,11 +41,10 @@ if mode == "📤 Upload file":
             tmp.write(uploaded_file.read())
             tmp_path = tmp.name
 
-        st.success("✅ File uploaded. Running detection...")
+        st.success("✅ File uploaded. Running detection ⭕")
 
-        # Run detection
         result_dir = detect_fire(tmp_path, is_video=suffix in ["mp4", "avi"])
-        st.session_state["result_dir"] = result_dir  # Store for view/download buttons
+        st.session_state["result_dir"] = result_dir
 
         if st.button("👀 View Your Result"):
             found = False
@@ -60,57 +58,73 @@ if mode == "📤 Upload file":
                     found = True
 
             if not found:
-                st.warning("✅ Detection done, but no output found!")
+                st.warning("✅ Detection done, but no output file found.")
 
-        # Download Button
+        # Download Button(s)
         for file in os.listdir(result_dir):
             file_path = os.path.join(result_dir, file)
             with open(file_path, "rb") as f:
                 st.download_button("📥 Download Result", data=f, file_name=file, mime="application/octet-stream")
 
 
-# 📷 Webcam (Local Only)
+# 📷 Webcam Mode
 elif mode == "📷 Use Webcam":
-    st.warning("⚠️ Webcam works only in **local environments** (not Streamlit Cloud).")
+    st.warning("⚠️ Webcam access works only on your **local machine**.")
 
-    if st.button("🎥 Start Camera Detection"):
+    if st.button("📸 Start Camera Detection"):
         cap = cv2.VideoCapture(0)
         stframe = st.empty()
-        stop_placeholder = st.empty()
+        progress = st.progress(0)
+        fire_message = st.empty()
 
-        while cap.isOpened():
+        while True:
             ret, frame = cap.read()
             if not ret:
-                st.error("❌ Failed to read from webcam.")
+                st.error("❌ Failed to access webcam.")
                 break
 
-            # YOLO inference
-            results = model.predict(frame, conf=0.5, stream=True)
-            for r in results:
-                annotated = r.plot()
-                stframe.image(annotated, caption="Live Fire Detection", use_container_width=True)
+            results = model.predict(source=frame, conf=0.6)
+            annotated_frame = results[0].plot()
 
-            # Stop button rendered once
-            if stop_placeholder.button("🛑 Stop Camera"):
+            # Detect fire (assuming class 0 is 'fire')
+            fire_detected = any(cls == 0 for cls in results[0].boxes.cls)
+
+            # Update UI
+            progress.progress(100 if fire_detected else 0)
+            fire_message.info("🔥 Fire Detected!" if fire_detected else "No Fire Detected")
+            stframe.image(annotated_frame, channels="BGR")
+
+            # Break loop on user interrupt
+            if cv2.waitKey(1) & 0xFF == ord('q'):
                 break
+
+            time.sleep(0.03)
 
         cap.release()
-        stop_placeholder.empty()
 
-# ✨ Footer with blinking ❤️ only
+
+# Add this to the bottom of your app.py file
+# ✨ Stylish Footer with blinking ❤️ and centered text
 st.markdown("""
-<style>
-.footer {
-    text-align: center;
-    font-size: 13px;
-}
-.blink-heart {
-    animation: blink 1s infinite;
-    color: #ff4b4b;
-}
-@keyframes blink {
-    50% { opacity: 0; }
-}
-</style>
-<div class="footer">made with <span class="blink-heart">❤️</span> by Azad Bhasme</div>
+    <link href="https://fonts.googleapis.com/css2?family=Quicksand:wght@500&display=swap" rel="stylesheet">
+    <style>
+        .footer {
+            position: fixed;
+            bottom: 20px;
+            left: 0;
+            width: 100%;
+            text-align: center;
+            font-family: 'Quicksand', sans-serif;
+            font-size: 15px;
+            color: #fff;
+        }
+        .blink-heart {
+            animation: blink 1s infinite;
+            color: #ff4b4b;
+        }
+        @keyframes blink {
+            50% { opacity: 0; }
+        }
+    </style>
+    <div class="footer">made with <span class="blink-heart">❤️</span> by Azad Bhasme</div>
 """, unsafe_allow_html=True)
