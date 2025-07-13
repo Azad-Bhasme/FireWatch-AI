@@ -17,4 +17,4 @@
 - OpenCV  
 - Streamlit (for the web app)
 
-
+🔺Live App🔻: https://firewatch-ai-byazad.streamlit.app
