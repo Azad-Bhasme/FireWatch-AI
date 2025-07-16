@@ -126,5 +126,5 @@ st.markdown("""
             50% { opacity: 0; }
         }
     </style>
-    <div class="footer">made with <span class="blink-heart">❤️</span> by Azad Bhasme</div>
+    <div class="footer">made with <span class="blink-heart">❤️</span> by Azad Bhasme|FireWatchAI © 2025</div>
 """, unsafe_allow_html=True)
